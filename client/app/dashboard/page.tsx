@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Menu, X, LogOut, Upload, Image, Video, Palette, Armchair, Leaf, Bookmark, Plus, ArrowUpRight, Home, CheckCircle, AlertCircle, ShoppingCart, Save, Trash2, Calendar, Globe } from 'lucide-react';
+import { LogOut, Upload, Image, Video, Palette, Armchair, Leaf, Bookmark, Plus, ArrowUpRight, Home, ArrowLeft, CheckCircle, AlertCircle, ShoppingCart, Save, Trash2, Calendar, ChevronDown, UserRound, Settings, Sparkles, ArrowRight, Box, Clock3 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
+import { apiUrl, formatApiError } from '@/lib/api';
 import Analyze2DFloorPlan from '../../components/Analyze2DFloorPlan';
+import DesignLoadingAnimation from '../../components/DesignLoadingAnimation';
 import { supabase } from '../../lib/supabase/client';
 
 // Translations
@@ -130,6 +132,7 @@ export default function DashboardPage() {
   const [language, setLanguage] = useState<Language>('english');
   const t = translations[language];
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isDashboardHome, setIsDashboardHome] = useState(true);
   const [activeSection, setActiveSection] = useState('wall-painting');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
@@ -153,9 +156,12 @@ export default function DashboardPage() {
   const [budget, setBudget] = useState<string>('500000');
   const [isAnalyzingHouse, setIsAnalyzingHouse] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [authUser, setAuthUser] = useState<{ name: string; email: string } | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<File | null>(null);
+  const toolHistoryDepthRef = useRef(0);
+  const pendingHistoryBackRef = useRef(false);
 
   // Load saved designs and language from localStorage on mount
   useEffect(() => {
@@ -175,6 +181,32 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const syncToolFromUrl = () => {
+      const tool = new URLSearchParams(window.location.search).get('tool');
+      if (tool) {
+        setIsDashboardHome(false);
+        setActiveSection(tool);
+        setViewingDesign(null);
+      } else {
+        setIsDashboardHome(true);
+        setViewingDesign(null);
+      }
+    };
+
+    syncToolFromUrl();
+    const handlePopState = () => {
+      if (pendingHistoryBackRef.current) {
+        pendingHistoryBackRef.current = false;
+      } else if (toolHistoryDepthRef.current > 0) {
+        toolHistoryDepthRef.current -= 1;
+      }
+      syncToolFromUrl();
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
     if (!supabase) {
       router.replace('/login');
       return;
@@ -183,12 +215,25 @@ export default function DashboardPage() {
     let mounted = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      if (data.session) setAuthReady(true);
+      if (data.session) {
+        const user = data.session.user;
+        setAuthUser({
+          name: (user.user_metadata?.full_name as string | undefined)?.trim() || user.email?.split('@')[0] || 'Designer',
+          email: user.email || '',
+        });
+        setAuthReady(true);
+      }
       else router.replace('/login');
     });
 
     const { data: authSubscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) setAuthReady(true);
+      if (session) {
+        setAuthUser({
+          name: (session.user.user_metadata?.full_name as string | undefined)?.trim() || session.user.email?.split('@')[0] || 'Designer',
+          email: session.user.email || '',
+        });
+        setAuthReady(true);
+      }
       else router.replace('/login');
     });
 
@@ -263,38 +308,41 @@ export default function DashboardPage() {
     }
   };
 
+  const prepareImageFile = (file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
+      setUploadError('Please upload a JPG, JPEG, PNG, or WEBP image.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File size must be less than 10MB.');
+      return;
+    }
+
+    fileRef.current = file;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const imageDataUrl = event.target?.result as string;
+      setUploadedImage(imageDataUrl);
+      setUploadedFileName(file.name);
+      setUploadSuccess(false);
+      setUploadError(null);
+      setAnalysisData(null);
+      setGenerationError(null);
+    };
+    reader.onerror = () => setUploadError('Unable to read this image. Please try another file.');
+    reader.readAsDataURL(file);
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-      if (!allowedTypes.includes(file.type)) {
-        alert('Please upload a valid image (JPG, JPEG, or PNG)');
-        return;
-      }
+    if (file) prepareImageFile(file);
+  };
 
-      // Validate file size (max 10MB)
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        alert('File size must be less than 10MB');
-        return;
-      }
-
-      // Store file reference for backend upload
-      fileRef.current = file;
-
-      // Read and preview the image
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const imageDataUrl = event.target?.result as string;
-        setUploadedImage(imageDataUrl);
-        setUploadedFileName(file.name);
-        setUploadSuccess(false);
-        setUploadError(null);
-        console.log('Image ready for upload:', file.name);
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) prepareImageFile(file);
   };
 
   const clearUploadedImage = () => {
@@ -318,6 +366,7 @@ export default function DashboardPage() {
       return;
     }
 
+    let generationStarted = false;
     setIsUploading(true);
     setUploadError(null);
     setUploadSuccess(false);
@@ -333,7 +382,7 @@ export default function DashboardPage() {
       formData.append('language', language);
 
       const uploadResponse = await axios.post(
-        'http://127.0.0.1:8000/upload-image',
+        apiUrl('/upload-image'),
         formData,
         {
           headers: {
@@ -351,6 +400,7 @@ export default function DashboardPage() {
       console.log('Step 2: Analyzing room with AI...');
       setIsUploading(false);
       setIsGenerating(true);
+      generationStarted = true;
 
       let generateResponse;
       
@@ -361,7 +411,7 @@ export default function DashboardPage() {
         generateFormData.append('image_path', uploadedPath);
 
         generateResponse = await axios.post(
-          'http://127.0.0.1:8000/generate-furniture-design',
+          apiUrl('/generate-furniture-design'),
           generateFormData,
           {
             headers: {
@@ -377,7 +427,7 @@ export default function DashboardPage() {
         generateFormData.append('language', language);
 
         generateResponse = await axios.post(
-          'http://127.0.0.1:8000/generate-plants-decor',
+          apiUrl('/generate-plants-decor'),
           generateFormData,
           {
             headers: {
@@ -394,7 +444,7 @@ export default function DashboardPage() {
         generateFormData.append('language', language);
 
         generateResponse = await axios.post(
-          'http://127.0.0.1:8000/generate-design',
+          apiUrl('/generate-design'),
           generateFormData,
           {
             headers: {
@@ -413,13 +463,9 @@ export default function DashboardPage() {
         setGenerationSuccess(false);
       }, 4000);
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to process request';
+      const errorMessage = formatApiError(error, 'Failed to process request');
       
-      if (isGenerating) {
+      if (generationStarted) {
         setGenerationError(errorMessage);
         setTimeout(() => {
           setGenerationError(null);
@@ -434,14 +480,6 @@ export default function DashboardPage() {
     } finally {
       setIsUploading(false);
       setIsGenerating(false);
-    }
-  };
-
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      console.log('Video uploaded:', file.name);
-      // TODO: Handle video upload to backend
     }
   };
 
@@ -491,79 +529,106 @@ export default function DashboardPage() {
     description: 'Describe your floors, rooms, walls, doors, and windows',
   };
   const isFloorPlanSection = activeSection === 'analyze-2d-floor-plan';
-  const ActiveIcon = activeSecData?.icon || Palette;
+  const displayName = authUser?.name || 'Designer';
+  const initials = displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  const showcaseSections = sections.filter((section) => ['wall-painting', 'furniture', 'plants-decor', 'smart-house-analysis'].includes(section.id));
+  const openTool = (sectionId: string) => {
+    setIsDashboardHome(false);
+    setActiveSection(sectionId);
+    setViewingDesign(null);
+    toolHistoryDepthRef.current += 1;
+    window.history.pushState(
+      { designAI: 'tool', tool: sectionId },
+      '',
+      `/dashboard?tool=${encodeURIComponent(sectionId)}`,
+    );
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const handleBackNavigation = () => {
+    if (toolHistoryDepthRef.current > 0) {
+      toolHistoryDepthRef.current -= 1;
+      pendingHistoryBackRef.current = true;
+      window.history.back();
+    } else {
+      router.replace('/dashboard');
+    }
+  };
+  const goToDashboardHome = () => {
+    toolHistoryDepthRef.current = 0;
+    setIsDashboardHome(true);
+    setViewingDesign(null);
+    setAnalysisData(null);
+    router.replace('/dashboard');
+  };
 
   if (!authReady) {
     return <div className="flex min-h-screen items-center justify-center bg-gray-50 text-gray-500">Checking your session...</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f5f3ff]">
       {/* Sidebar */}
-      <div
+      {activeSection === '__sidebar_disabled__' && <div
         className={`fixed left-0 top-0 h-full bg-white shadow-lg transition-all duration-300 z-40 ${
           isSidebarOpen ? 'w-64' : 'w-0'
         } overflow-hidden`}
       >
-        <div className="p-6 border-b">
+        <div className="p-6 border-b border-violet-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-xl font-bold text-white">🎨</span>
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              DesignAI
-            </span>
+            <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">DesignAI</span>
           </div>
         </div>
-
         <nav className="p-4 space-y-2">
           {sections.map((section) => {
             const Icon = section.icon;
-            return (
-              <button
-                key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-                  activeSection === section.id
-                    ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 font-semibold border-l-4 border-purple-600'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span>{section.title}</span>
-              </button>
-            );
+            return <button key={section.id} onClick={() => openTool(section.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${activeSection === section.id ? 'bg-gradient-to-r from-violet-100 to-blue-100 text-violet-700 font-semibold border-l-4 border-violet-600' : 'text-gray-700 hover:bg-violet-50'}`}><Icon className="w-5 h-5" /><span>{section.title}</span></button>;
           })}
         </nav>
-
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-gray-50">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition font-medium"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Logout</span>
-          </button>
-        </div>
-      </div>
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-violet-100 bg-violet-50/80"><button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition font-medium"><LogOut className="w-5 h-5" /><span>Logout</span></button></div>
+      </div>}
 
       {/* Main Content */}
       <div
         className={`transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-0'
+          activeSection === '__sidebar_disabled__' && isSidebarOpen ? 'ml-64' : 'ml-0'
         }`}
       >
         {/* Top Header */}
-        <div className="bg-white shadow-sm border-b sticky top-0 z-30">
+        <div className="bg-white/90 shadow-sm border-b border-violet-100 sticky top-0 z-30 backdrop-blur-xl">
           <div className="flex items-center justify-between p-6">
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
-              {viewingDesign && activeSection === 'saved-designs' ? (
+              {isDashboardHome ? (
+                <div className="w-10" />
+              ) : (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleBackNavigation}
+                    className="rounded-lg p-2 text-violet-600 transition hover:bg-violet-50"
+                    title="Go back"
+                    aria-label="Go back to the previous page"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={goToDashboardHome}
+                    className="rounded-lg p-2 text-violet-600 transition hover:bg-violet-50"
+                    title="Dashboard home"
+                    aria-label="Go to DesignAI dashboard"
+                  >
+                    <Home className="h-5 w-5" />
+                  </button>
+                  <span className="px-2 text-lg font-bold bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text text-transparent">DesignAI</span>
+                </div>
+              )}
+              {isDashboardHome ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-500">Welcome back</p>
+                  <h1 className="text-2xl font-bold text-gray-900">Your Design Studio</h1>
+                </div>
+              ) : viewingDesign && activeSection === 'saved-designs' ? (
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => {
@@ -582,35 +647,74 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <h1 className="text-2xl font-bold text-gray-900">{activeSecData?.title}</h1>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-500">Design workspace</p>
+                  <h1 className="text-2xl font-bold text-gray-900">{activeSecData?.title}</h1>
+                </div>
               )}
             </div>
             <div className="flex items-center gap-4">
-              {/* Language Selector */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
-                <Globe className="w-5 h-5 text-gray-600" />
-                <select
-                  value={language}
-                  onChange={(e) => {
-                    const newLanguage = e.target.value as Language;
-                    setLanguage(newLanguage);
-                    localStorage.setItem('preferredLanguage', newLanguage);
-                  }}
-                  className="bg-gray-100 border-none text-gray-900 font-medium cursor-pointer focus:outline-none"
-                >
-                  <option value="english">English</option>
-                  <option value="bengali">বাংলা</option>
-                </select>
-              </div>
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold cursor-pointer">
-                👤
+              <div className="relative">
+                <button onClick={() => setProfileOpen((open) => !open)} className="flex items-center gap-2 rounded-full border border-violet-100 bg-violet-50 p-1.5 pr-3 hover:bg-violet-100" aria-expanded={profileOpen}>
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-blue-500 text-sm font-bold text-white">{initials}</span>
+                  <span className="hidden max-w-[120px] truncate text-sm font-semibold text-slate-700 sm:block">{displayName}</span>
+                  <ChevronDown className="h-4 w-4 text-violet-600" />
+                </button>
+                {profileOpen ? (
+                  <div className="absolute right-0 top-14 z-50 w-72 overflow-hidden rounded-2xl border border-violet-100 bg-white p-2 shadow-2xl shadow-violet-900/15">
+                    <div className="rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 p-4 text-white">
+                      <p className="font-bold">{displayName}</p>
+                      <p className="mt-1 truncate text-xs text-violet-100">{authUser?.email}</p>
+                    </div>
+                    <button onClick={() => router.push('/profile')} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-violet-50"><UserRound className="h-4 w-4 text-violet-600" /> Profile</button>
+                    <button onClick={() => router.push('/settings')} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-violet-50"><Settings className="h-4 w-4 text-violet-600" /> Settings</button>
+                    <button onClick={() => { openTool('saved-designs'); setProfileOpen(false); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-violet-50"><Bookmark className="h-4 w-4 text-violet-600" /> Saved Designs</button>
+                    <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl border-t border-slate-100 px-3 py-3 text-left text-sm font-semibold text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" /> Logout</button>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
         </div>
 
         {/* Content Area */}
-        <div className="p-8">
+        <div className="p-5 sm:p-8">
+          {isDashboardHome && (
+            <div className="mb-10 space-y-8">
+              <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#34146e] via-[#5635bd] to-[#1676cf] p-7 text-white shadow-2xl shadow-violet-900/25 sm:p-10">
+                <img src="/assets/hero-interior.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-screen" />
+                <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-fuchsia-400/30 blur-3xl" />
+                <div className="relative max-w-2xl">
+                  <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-violet-100"><Sparkles className="h-3.5 w-3.5" /> AI interior studio</div>
+                  <h2 className="max-w-xl text-3xl font-bold leading-tight sm:text-5xl">Turn your space into a place you love to live in.</h2>
+                  <p className="mt-4 max-w-xl text-base leading-7 text-violet-100">Upload a room photo and let DesignAI shape the colors, furniture, and details around your lifestyle.</p>
+                </div>
+                <div className="relative mt-9 grid max-w-xl grid-cols-3 gap-3 border-t border-white/20 pt-5 text-sm text-violet-100">
+                  <span><b className="block text-xl text-white">4</b>AI design tools</span><span><b className="block text-xl text-white">2D → 3D</b>Floor planning</span><span><b className="block text-xl text-white">∞</b>Possibilities</span>
+                </div>
+              </section>
+
+              <div className="flex items-end justify-between"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-500">Explore your toolkit</p><h2 className="mt-1 text-2xl font-bold text-slate-900">Design every layer of your home</h2></div><span className="hidden text-sm text-slate-500 sm:block">Choose a starting point</span></div>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                {showcaseSections.map((section) => {
+                  const Icon = section.icon;
+                  const image = section.id === 'wall-painting' ? '/assets/tool-wall.jpg' : section.id === 'furniture' ? '/assets/tool-furniture.jpg' : section.id === 'plants-decor' ? '/assets/tool-plants.jpg' : '/assets/tool-analysis.jpg';
+                  return <button key={section.id} onClick={() => openTool(section.id)} className="group relative min-h-[285px] overflow-hidden rounded-3xl bg-slate-900 text-left shadow-xl shadow-slate-900/10 transition hover:-translate-y-1 hover:shadow-2xl">
+                    <img src={image} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/35 to-transparent" />
+                    <div className="relative flex h-full flex-col justify-end p-5 text-white"><span className="mb-auto grid h-11 w-11 place-items-center rounded-2xl bg-white/20 backdrop-blur-md"><Icon className="h-5 w-5" /></span><h3 className="text-xl font-bold">{section.title}</h3><p className="mt-1 text-sm leading-5 text-white/75">{section.description}</p><span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-white">Open tool <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" /></span></div>
+                  </button>;
+                })}
+              </div>
+              <button onClick={() => openTool('analyze-2d-floor-plan')} className="group relative flex min-h-[190px] w-full overflow-hidden rounded-3xl bg-slate-950 text-left shadow-xl shadow-blue-900/15 transition hover:-translate-y-1">
+                <img src="/assets/house-3d.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-60 transition duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/70 to-transparent" />
+                <div className="relative flex max-w-xl flex-col justify-center p-7 text-white sm:p-9"><span className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-300"><Box className="h-4 w-4" /> Spatial intelligence</span><h3 className="text-2xl font-bold sm:text-3xl">Transform 2D Floor Plan into 3D House</h3><p className="mt-2 text-sm text-slate-300">Sketch your rooms, then explore the home in an interactive 3D view.</p><span className="mt-5 inline-flex w-fit items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-bold text-slate-950">Open floor-plan studio <ArrowRight className="h-4 w-4" /></span></div>
+              </button>
+              <section className="rounded-3xl border border-violet-100 bg-white/80 p-6 shadow-lg shadow-violet-900/5 sm:p-7">
+                <div className="mb-5 flex items-center justify-between"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-500">Your workspace</p><h2 className="mt-1 text-2xl font-bold text-slate-900">Recent Designs</h2></div><button onClick={() => openTool('saved-designs')} className="text-sm font-bold text-violet-700 hover:underline">View all</button></div>
+                {savedDesigns.length > 0 ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{savedDesigns.slice(0, 4).map((design) => <button key={design.id} onClick={() => { openTool('saved-designs'); handleViewSavedDesign(design); }} className="group overflow-hidden rounded-2xl border border-slate-100 bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg"><img src={design.imageBase64} alt={design.fileName} className="aspect-[4/3] w-full object-cover transition group-hover:scale-105" /><span className="block p-3"><b className="block truncate text-sm text-slate-900">{design.fileName}</b><span className="mt-1 flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3 w-3" />{new Date(design.savedDate).toLocaleDateString()}</span></span></button>)}</div> : <div className="rounded-2xl bg-gradient-to-r from-violet-50 to-blue-50 p-6 text-center"><Bookmark className="mx-auto h-8 w-8 text-violet-400" /><p className="mt-2 font-semibold text-slate-800">Your design gallery is ready</p><p className="mt-1 text-sm text-slate-500">Upload a room photo inside the Wall Painting tool to create your first saved design.</p><button onClick={() => openTool('wall-painting')} className="mt-4 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white hover:bg-violet-700">Open Wall Painting</button></div>}
+              </section>
+            </div>
+          )}
           {/* Smart House Analysis Page */}
           {activeSection === 'smart-house-analysis' && (
             <>
@@ -742,7 +846,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Analyze House Button */}
-                  <button
+                  {isAnalyzingHouse ? <div className="mt-8 rounded-2xl bg-gradient-to-br from-violet-50 to-blue-50"><DesignLoadingAnimation label={t.analyzingHouse} /></div> : <button
                     onClick={async () => {
                       setIsAnalyzingHouse(true);
                       try {
@@ -780,7 +884,7 @@ export default function DashboardPage() {
                         formData.append('language', language);
 
                         const response = await axios.post(
-                          'http://127.0.0.1:8000/analyze-smart-house',
+                          apiUrl('/analyze-smart-house'),
                           formData
                         );
 
@@ -789,11 +893,7 @@ export default function DashboardPage() {
                         setTimeout(() => setGenerationSuccess(false), 4000);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       } catch (error: any) {
-                        const errorMessage =
-                          error.response?.data?.detail ||
-                          error.response?.data?.message ||
-                          error.message ||
-                          'Failed to analyze house';
+                        const errorMessage = formatApiError(error, 'Failed to analyze house');
                         setGenerationError(errorMessage);
                         setTimeout(() => setGenerationError(null), 5000);
                         console.error('Error:', error);
@@ -804,19 +904,12 @@ export default function DashboardPage() {
                     disabled={isAnalyzingHouse}
                     className="w-full mt-8 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    {isAnalyzingHouse ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Analyzing Your Home...
-                      </>
-                    ) : (
-                      'Analyze House'
-                    )}
-                  </button>
+                    Analyze House
+                  </button>}
 
                   <button
                     type="button"
-                    onClick={() => setActiveSection('analyze-2d-floor-plan')}
+                    onClick={() => openTool('analyze-2d-floor-plan')}
                     className="w-full mt-3 py-4 border border-indigo-200 text-indigo-700 rounded-lg font-semibold hover:bg-indigo-50 transition flex items-center justify-center gap-2"
                   >
                     Analyze 2D Floor Plan
@@ -895,19 +988,19 @@ export default function DashboardPage() {
                     <p className="text-indigo-100 mb-6">Start by analyzing your wall, furniture, or plants & decor in individual sections, then combine all recommendations for a complete home makeover plan.</p>
                     <div className="flex gap-4 flex-wrap">
                       <button
-                        onClick={() => setActiveSection('wall-painting')}
+                        onClick={() => openTool('wall-painting')}
                         className="px-6 py-3 bg-white text-indigo-600 rounded-lg font-semibold hover:shadow-lg transition"
                       >
                         Analyze Wall
                       </button>
                       <button
-                        onClick={() => setActiveSection('furniture')}
+                        onClick={() => openTool('furniture')}
                         className="px-6 py-3 bg-white/20 text-white border border-white rounded-lg font-semibold hover:bg-white/30 transition"
                       >
                         Analyze Furniture
                       </button>
                       <button
-                        onClick={() => setActiveSection('plants-decor')}
+                        onClick={() => openTool('plants-decor')}
                         className="px-6 py-3 bg-white/20 text-white border border-white rounded-lg font-semibold hover:bg-white/30 transition"
                       >
                         Analyze Plants & Decor
@@ -919,10 +1012,10 @@ export default function DashboardPage() {
             </>
           )}
 
-          {activeSection === 'analyze-2d-floor-plan' && <Analyze2DFloorPlan />}
+          {!isDashboardHome && activeSection === 'analyze-2d-floor-plan' && <Analyze2DFloorPlan />}
 
           {/* Saved Designs Gallery - When viewing saved-designs tab */}
-          {activeSection === 'saved-designs' && !viewingDesign && (
+          {!isDashboardHome && activeSection === 'saved-designs' && !viewingDesign && (
             <>
               {/* Section Description */}
               <div className="mb-8">
@@ -1013,7 +1106,7 @@ export default function DashboardPage() {
                     Create your first design by uploading an image and start transforming your space
                   </p>
                   <button
-                    onClick={() => setActiveSection('wall-painting')}
+                    onClick={() => openTool('wall-painting')}
                     className="px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition font-semibold"
                   >
                     Create Design
@@ -1024,128 +1117,72 @@ export default function DashboardPage() {
           )}
 
           {/* Section Description - For other sections */}
-          {activeSection !== 'saved-designs' && activeSection !== 'smart-house-analysis' && !isFloorPlanSection && (
+          {!isDashboardHome && activeSection !== 'saved-designs' && activeSection !== 'smart-house-analysis' && !isFloorPlanSection && (
             <div className="mb-8">
               <p className="text-gray-600 text-lg">{activeSecData?.description}</p>
             </div>
           )}
 
-          {/* Upload Options - Hide when on saved-designs or smart-house-analysis */}
-          {activeSection !== 'saved-designs' && activeSection !== 'smart-house-analysis' && !isFloorPlanSection && (
-          <div className="grid md:grid-cols-2 gap-6 mb-12">
-            {/* Image Upload Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition">
-              <div className={`w-16 h-16 bg-gradient-to-br ${activeSecData?.color} rounded-xl flex items-center justify-center mb-4`}>
-                <Image className="w-8 h-8 text-white" />
+          {/* Colorful image workspace for the image-based AI tools */}
+          {!isDashboardHome && activeSection !== 'saved-designs' && activeSection !== 'smart-house-analysis' && !isFloorPlanSection && (
+          <div className="mb-12 grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
+            <div
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={handleImageDrop}
+              className="relative overflow-hidden rounded-[2rem] border border-violet-100 bg-white p-6 shadow-xl shadow-violet-900/10 sm:p-8"
+            >
+              <div className={`absolute right-0 top-0 h-40 w-40 rounded-full bg-gradient-to-br ${activeSecData?.color} opacity-15 blur-3xl`} />
+              <div className="relative">
+                <div className="mb-6 flex items-start justify-between gap-4">
+                  <div>
+                    <span className={`mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${activeSecData?.color} text-white shadow-lg`}><Image className="h-6 w-6" /></span>
+                    <h2 className="text-2xl font-bold text-slate-950">Bring your room into the studio</h2>
+                    <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">Drop a room photo here and let our AI create thoughtful {activeSecData?.title.toLowerCase()} ideas around it.</p>
+                  </div>
+                  <span className="hidden rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 sm:block">AI powered</span>
+                </div>
+                <div className="rounded-3xl border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50/80 via-white to-blue-50/80 p-5">
+                  {uploadedImage ? (
+                    <div className="grid gap-5 md:grid-cols-[180px_1fr] md:items-center">
+                      <img src={uploadedImage} alt="Uploaded room preview" className="aspect-square w-full rounded-2xl object-cover shadow-lg" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-700">Image ready for analysis</p>
+                        <p className="mt-2 break-all text-sm font-medium text-slate-800">{uploadedFileName}</p>
+                        <p className="mt-1 text-xs text-slate-500">You can replace it or generate recommendations when ready.</p>
+                        <div className="mt-5 flex flex-wrap gap-3">
+                          <button onClick={() => imageInputRef.current?.click()} className="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-bold text-violet-700 hover:bg-violet-50">Replace image</button>
+                          <button onClick={clearUploadedImage} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50">Remove image</button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex min-h-[220px] flex-col items-center justify-center text-center">
+                      <span className="grid h-16 w-16 place-items-center rounded-2xl bg-white text-violet-600 shadow-md"><Upload className="h-7 w-7" /></span>
+                      <p className="mt-5 text-lg font-bold text-slate-900">Drag and drop your room image</p>
+                      <p className="mt-1 text-sm text-slate-500">JPG, JPEG, PNG, or WEBP · up to 10MB</p>
+                      <button onClick={() => imageInputRef.current?.click()} className={`mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r ${activeSecData?.color} px-5 py-3 text-sm font-bold text-white shadow-lg hover:-translate-y-0.5`}><Upload className="h-4 w-4" /> Choose Image</button>
+                    </div>
+                  )}
+                  <input ref={imageInputRef} type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={handleImageUpload} className="hidden" />
+                </div>
+                {uploadError ? <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />{uploadError}</div> : null}
+                {uploadedImage ? isGenerating ? (
+                  <div className="mt-5 rounded-2xl bg-gradient-to-br from-violet-50 to-blue-50">
+                    <DesignLoadingAnimation />
+                  </div>
+                ) : (
+                  <button onClick={handleAnalyzeWithAI} disabled={isUploading} className={`mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${activeSecData?.color} font-bold text-white shadow-lg disabled:opacity-50`}>{isUploading ? <><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" /> Uploading...</> : <><Sparkles className="h-4 w-4" /> Generate Design</>}</button>
+                ) : null}
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Upload Image</h3>
-              <p className="text-gray-600 mb-6">
-                Upload a photo of your room to see AI-powered design suggestions
-              </p>
-              <button
-                onClick={() => imageInputRef.current?.click()}
-                className={`w-full py-3 bg-gradient-to-r ${activeSecData?.color} text-white rounded-xl font-semibold hover:shadow-lg transition transform hover:scale-105 flex items-center justify-center gap-2`}
-              >
-                <Upload className="w-5 h-5" />
-                Choose Image
-              </button>
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"        
-              />
             </div>
-
-            {/* Video Upload Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition">
-              <div className={`w-16 h-16 bg-gradient-to-br ${activeSecData?.color} rounded-xl flex items-center justify-center mb-4 opacity-70`}>
-                <Video className="w-8 h-8 text-white" />
+            <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 via-violet-950 to-blue-900 p-6 text-white shadow-xl shadow-blue-900/15 sm:p-8">
+              <img src={activeSection === 'furniture' ? '/assets/tool-furniture.jpg' : activeSection === 'plants-decor' ? '/assets/tool-plants.jpg' : '/assets/tool-wall.jpg'} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25 mix-blend-screen" />
+              <div className="relative flex h-full min-h-[250px] flex-col justify-between">
+                <div><span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-violet-200"><Video className="mr-2 h-3.5 w-3.5" /> Video analysis</span><h3 className="mt-5 text-2xl font-bold">A richer walkthrough is coming.</h3><p className="mt-3 text-sm leading-6 text-slate-300">Video analysis is being tuned for accurate room-by-room recommendations.</p></div>
+                <div><span className="inline-flex rounded-xl bg-white/10 px-4 py-2 text-sm font-bold text-white">Coming Soon</span><p className="mt-3 text-xs text-slate-400">Video upload is currently disabled.</p></div>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Upload Video</h3>
-              <p className="text-gray-600 mb-6">
-                Upload a video walkthrough for comprehensive design analysis
-              </p>
-              <button
-                onClick={() => videoInputRef.current?.click()}
-                className={`w-full py-3 bg-gradient-to-r ${activeSecData?.color} text-white rounded-xl font-semibold opacity-70 hover:opacity-100 hover:shadow-lg transition transform hover:scale-105 flex items-center justify-center gap-2 disabled:cursor-not-allowed`}
-                disabled
-              >
-                <Upload className="w-5 h-5" />
-                Choose Video
-              </button>
-              <input
-                ref={videoInputRef}
-                type="file"
-                accept="video/*"
-                onChange={handleVideoUpload}
-                className="hidden"
-              />
-              <p className="text-xs text-gray-500 mt-2">Coming Soon</p>
             </div>
           </div>
-          )}
-
-          {/* Image Preview Section - Hide when on saved-designs or smart-house-analysis */}
-          {activeSection !== 'saved-designs' && activeSection !== 'smart-house-analysis' && !isFloorPlanSection && uploadedImage && (
-            <div className="mb-12">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Image Preview</h2>
-                <button
-                  onClick={clearUploadedImage}
-                  disabled={isUploading}
-                  className="px-4 py-2 text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Clear
-                </button>
-              </div>
-              <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <div className="relative max-h-96 overflow-hidden flex items-center justify-center bg-gray-100">
-                  <img
-                    src={uploadedImage}
-                    alt="Uploaded preview"
-                    className="w-full h-auto object-contain"
-                  />
-                </div>
-                <div className="p-6 border-t">
-                  <p className="text-sm text-gray-600 mb-4">
-                    <span className="font-semibold">File:</span> {uploadedFileName}
-                  </p>
-
-                  {/* Success Message */}
-                  {uploadSuccess && (
-                    <div className="flex items-center gap-2 mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                      <span className="text-sm text-green-700">Image uploaded successfully!</span>
-                    </div>
-                  )}
-
-                  {/* Error Message */}
-                  {uploadError && (
-                    <div className="flex items-center gap-2 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                      <span className="text-sm text-red-700">{uploadError}</span>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleAnalyzeWithAI}
-                    disabled={isUploading || isGenerating}
-                    className={`w-full py-3 bg-gradient-to-r ${activeSecData?.color} text-white rounded-xl font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
-                  >
-                    {isUploading || isGenerating ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        {isUploading ? 'Uploading...' : 'Generating...'}
-                      </>
-                    ) : (
-                      'Analyze with AI'
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
           )}
 
           {/* Smart House Analysis Results */}
@@ -1684,7 +1721,7 @@ export default function DashboardPage() {
           )}
 
           {/* Recent Designs - Hide when viewing saved design */}
-          {!viewingDesign && activeSection !== 'saved-designs' && !isFloorPlanSection && (
+          {!isDashboardHome && !viewingDesign && activeSection !== 'saved-designs' && !isFloorPlanSection && (
             <div className="mb-12">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Recent Designs</h2>

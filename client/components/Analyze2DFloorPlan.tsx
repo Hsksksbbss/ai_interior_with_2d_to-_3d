@@ -6,6 +6,7 @@ import FloorPlanEditor from './floor-plan/FloorPlanEditor';
 import { generateFloor } from './floor-plan/FloorPlanEditor';
 import FloorPlan3D from './floor-plan/FloorPlan3D';
 import type { GeneratedFloor } from './floor-plan/FloorPlanEditor';
+import { Archive, Armchair, Bath, BedDouble, BookOpen, ChefHat, Flower2, MoreHorizontal, Ruler, Utensils, Waves } from 'lucide-react';
 
 /* ============================================================
    TYPES
@@ -121,13 +122,26 @@ function createEmptyFloor(floorNumber: number): Floor {
 const MAX_FLOORS = 4;
 const FLOOR_PLAN_INPUT_STORAGE_KEY = 'ai-interior-designer-floor-plan-input';
 
+const ROOM_ICONS: Record<RoomType, React.ComponentType<{ className?: string }>> = {
+  'Living Room': Armchair,
+  Bedroom: BedDouble,
+  Kitchen: ChefHat,
+  Bathroom: Bath,
+  'Dining Room': Utensils,
+  'Study Room': BookOpen,
+  'Puja Room': Flower2,
+  'Store Room': Archive,
+  Balcony: Waves,
+  'Other Room': MoreHorizontal,
+};
+
 /* ============================================================
    SMALL PRESENTATIONAL PRIMITIVES
    ============================================================ */
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="mb-1 block text-xs font-medium text-slate-600">
+    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
       {children}
     </label>
   );
@@ -158,7 +172,7 @@ function NumberField({
           min={min}
           step={step}
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm tabular-nums text-slate-900 shadow-sm transition focus:border-violet-500 focus:outline-none focus:ring-4 focus:ring-violet-500/10"
         />
         {suffix ? (
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
@@ -189,7 +203,7 @@ function TextField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-violet-500 focus:outline-none focus:ring-4 focus:ring-violet-500/10"
       />
     </div>
   );
@@ -214,7 +228,7 @@ function SelectField({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-violet-500 focus:outline-none focus:ring-4 focus:ring-violet-500/10"
       >
         {placeholder ? (
           <option value="" disabled>
@@ -243,12 +257,12 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-3xl border border-violet-100/80 bg-white/90 p-5 shadow-xl shadow-violet-900/5 backdrop-blur-sm sm:p-6">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-base font-bold text-slate-900">{title}</h3>
           {description ? (
-            <p className="mt-0.5 text-xs text-slate-500">{description}</p>
+            <p className="mt-1 text-sm text-slate-500">{description}</p>
           ) : null}
         </div>
         {action}
@@ -591,19 +605,21 @@ export default function Analyze2DFloorPlan() {
   const activeFloor = floors[activeFloorIndex];
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-10">
       {/* Header */}
-      <div className="mb-8">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-          Floor plan intake
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">
-          Analyze 2D Floor Plan
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-500">
+      <div className="relative mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#34146e] via-[#5635bd] to-[#1676cf] px-6 py-8 text-white shadow-2xl shadow-violet-900/20 sm:px-9 sm:py-10">
+        <div className="absolute -right-16 -top-20 h-60 w-60 rounded-full bg-cyan-300/20 blur-3xl" />
+        <div className="relative flex items-start gap-4">
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15 shadow-inner"><Ruler className="h-7 w-7 text-cyan-200" /></span>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-200">Spatial intelligence studio</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Analyze 2D Floor Plan</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-violet-100 sm:text-base">
           Describe your floors, rooms and measurements below. This data will
           be used to generate an editable 2D floor plan in a later step.
-        </p>
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Number of floors */}
@@ -611,7 +627,7 @@ export default function Analyze2DFloorPlan() {
         title="Number of floors"
         description="Choose how many floors this house has (up to 4)."
       >
-        <div className="max-w-xs">
+        <div className="max-w-xs rounded-2xl bg-violet-50/70 p-4">
           <SelectField
             label="Total floors"
             value={String(numberOfFloors)}
@@ -624,16 +640,16 @@ export default function Analyze2DFloorPlan() {
       </SectionCard>
 
       {/* Floor tabs */}
-      <div className="mt-6 flex gap-2 border-b border-slate-200">
+      <div className="mt-8 flex gap-2 overflow-x-auto rounded-2xl border border-violet-100 bg-white p-2 shadow-lg shadow-violet-900/5">
         {floors.map((floor, index) => (
           <button
             key={floor.id}
             type="button"
             onClick={() => setActiveFloorIndex(index)}
-            className={`relative -mb-px rounded-t-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`relative rounded-xl px-5 py-3 text-sm font-bold transition-colors ${
               index === activeFloorIndex
-                ? 'border border-b-white bg-white text-slate-900'
-                : 'border border-transparent text-slate-500 hover:text-slate-800'
+                ? 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md'
+                : 'border border-transparent text-slate-500 hover:bg-violet-50 hover:text-violet-700'
             }`}
           >
             Floor {floor.floorNumber}
@@ -648,18 +664,23 @@ export default function Analyze2DFloorPlan() {
             title="Rooms"
             description="Specify how many of each room type this floor has."
           >
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {activeFloor.rooms.map((room) => (
-                <NumberField
-                  key={room.type}
-                  label={room.type}
-                  value={room.quantity}
-                  min={0}
-                  step={1}
-                  onChange={(v) =>
-                    handleRoomQuantityChange(activeFloor.id, room.type, v)
-                  }
-                />
+                <div key={room.type} className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-violet-50/60 p-3 transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md">
+                  <div className="mb-2 flex items-center gap-2 text-violet-600">
+                    {React.createElement(ROOM_ICONS[room.type], { className: 'h-4 w-4' })}
+                    <span className="truncate text-xs font-bold text-slate-700">{room.type}</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={room.quantity}
+                    min={0}
+                    step={1}
+                    aria-label={`${room.type} count`}
+                    onChange={(e) => handleRoomQuantityChange(activeFloor.id, room.type, parseInt(e.target.value, 10) || 0)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                  />
+                </div>
               ))}
             </div>
           </SectionCard>
@@ -705,7 +726,7 @@ export default function Analyze2DFloorPlan() {
               <button
                 type="button"
                 onClick={() => addWall(activeFloor.id)}
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
+                className="rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 + Add wall
               </button>
@@ -774,7 +795,7 @@ export default function Analyze2DFloorPlan() {
                 onClick={() =>
                   addDoor(activeFloor.id, activeFloor.walls[0]?.id ?? '')
                 }
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
+                className="rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 + Add door
               </button>
@@ -865,7 +886,7 @@ export default function Analyze2DFloorPlan() {
                 onClick={() =>
                   addWindow(activeFloor.id, activeFloor.walls[0]?.id ?? '')
                 }
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
+                className="rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 + Add window
               </button>
@@ -959,7 +980,7 @@ export default function Analyze2DFloorPlan() {
                 }
                 className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
                   !activeFloor.staircase.included
-                    ? 'border-slate-900 bg-slate-900 text-white'
+                    ? 'border-violet-600 bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md'
                     : 'border-slate-300 text-slate-500'
                 }`}
               >
@@ -972,7 +993,7 @@ export default function Analyze2DFloorPlan() {
                 }
                 className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
                   activeFloor.staircase.included
-                    ? 'border-slate-900 bg-slate-900 text-white'
+                    ? 'border-violet-600 bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md'
                     : 'border-slate-300 text-slate-500'
                 }`}
               >
@@ -1076,7 +1097,7 @@ export default function Analyze2DFloorPlan() {
           <button
             type="button"
             onClick={handleGenerate}
-            className="rounded-md bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-700"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-600/20 transition hover:-translate-y-0.5 hover:shadow-xl"
           >
             Generate 2D Floor Plan
           </button>
@@ -1111,7 +1132,7 @@ export default function Analyze2DFloorPlan() {
                 onClick={() => setViewMode('preview')}
                 className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
                   viewMode === 'preview'
-                    ? 'border-slate-900 bg-slate-900 text-white'
+                    ? 'border-violet-600 bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md'
                     : 'border-slate-300 text-slate-600 hover:border-slate-500'
                 }`}
               >
@@ -1122,7 +1143,7 @@ export default function Analyze2DFloorPlan() {
                 onClick={() => setViewMode('edit')}
                 className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
                   viewMode === 'edit'
-                    ? 'border-slate-900 bg-slate-900 text-white'
+                    ? 'border-violet-600 bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md'
                     : 'border-slate-300 text-slate-600 hover:border-slate-500'
                 }`}
               >
@@ -1133,7 +1154,7 @@ export default function Analyze2DFloorPlan() {
                 onClick={() => setViewMode('3d')}
                 className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
                   viewMode === '3d'
-                    ? 'border-slate-900 bg-slate-900 text-white'
+                    ? 'border-violet-600 bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md'
                     : 'border-slate-300 text-slate-600 hover:border-slate-500'
                 }`}
               >
@@ -1157,7 +1178,7 @@ export default function Analyze2DFloorPlan() {
                 <button
                   type="button"
                   onClick={handleApply2DChanges}
-                  className="rounded-md bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-700"
+                  className="rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-600/20 transition hover:-translate-y-0.5 hover:shadow-xl"
                 >
                   Save / Apply 2D Changes
                 </button>

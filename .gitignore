@@ -36,3 +36,18 @@ Thumbs.db
 # Python cache
 .pytest_cache/
 .mypy_cache/
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

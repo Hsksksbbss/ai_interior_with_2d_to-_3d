@@ -5,6 +5,7 @@ FastAPI application for handling design requests
 
 import sys
 import os
+from pathlib import Path
 
 # Add parent directory to path so we can import ai_generator
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,7 +25,7 @@ from app.schemas import UserSignup, UserLogin, AuthResponse, UserResponse
 from app.ai_generator import analyze_room_image, analyze_furniture_design, analyze_plants_decor, analyze_smart_house
 
 # Load environment variables
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -42,7 +43,14 @@ async def startup_event():
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000",
+        ).split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,7 +66,7 @@ def format_http_error_detail(message: str) -> str:
         or "no credits remaining" in lowered
         or "quota exhausted" in lowered
     ):
-        return "OpenAI quota exhausted. Please add credits to your OpenAI account and try again."
+        return "Gemini API quota exhausted. Please check your Gemini account quota and try again."
     return message
 
 

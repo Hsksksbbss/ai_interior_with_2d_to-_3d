@@ -208,28 +208,92 @@ function Window3D({ op, w, H }: { op: PlanOpening; w: PlanWall; H: number }) {
   );
 }
 
-function Room3D({ r, selected, onSelect, showLabel }: { r: PlanRoom; selected: boolean; onSelect: (r: PlanRoom) => void; showLabel: boolean }) {
-  const wet = r.kind === "bath" || r.kind === "kitchen" || r.kind === "balcony";
+function Room3D({
+  r,
+  selected,
+  onSelect,
+  showLabel,
+}: {
+  r: PlanRoom;
+  selected: boolean;
+  onSelect: (r: PlanRoom) => void;
+  showLabel: boolean;
+}) {
+  const wet =
+    r.kind === "bath" ||
+    r.kind === "kitchen" ||
+    r.kind === "balcony";
+
   return (
     <group>
       <mesh
-        position={[r.x + r.width / 2, 0.02, r.y + r.height / 2]}
+        position={[
+          r.x + r.width / 2,
+          0.02,
+          r.y + r.height / 2,
+        ]}
         rotation-x={-Math.PI / 2}
         receiveShadow
-        onClick={(e) => { e.stopPropagation(); onSelect(r); }}
-        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
-        onPointerOut={() => { document.body.style.cursor = ""; }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(r);
+        }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = "";
+        }}
       >
         <planeGeometry args={[r.width, r.height]} />
-        <meshStandardMaterial color={selected ? MAT.floorSel : wet ? MAT.floorWet : MAT.floor} roughness={0.7} />
+
+        <meshStandardMaterial
+          color={
+            selected
+              ? MAT.floorSel
+              : wet
+                ? MAT.floorWet
+                : MAT.floor
+          }
+          roughness={0.7}
+        />
       </mesh>
+
       {showLabel && r.kind !== "passage" && (
-        <Html position={[r.x + r.width / 2, 0.1, r.y + r.height / 2]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
-          <div style={labelStyle(selected)}>
-            <div style={{ fontWeight: 600 }}>{r.label}</div>
-            <div style={{ opacity: 0.75 }}>{formatFtIn(r.width)} × {formatFtIn(r.height)}</div>
-          </div>
-        </Html>
+        <group
+          position={[
+            r.x + r.width / 2,
+            0.12,
+            r.y + r.height / 2,
+          ]}
+        >
+          <Text
+            position={[0, 0, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            anchorX="center"
+            anchorY="middle"
+            fontSize={0.55}
+            color={selected ? "#111111" : "#333333"}
+            depthOffset={-1}
+            outlineWidth={0.02}
+            outlineColor="#ffffff"
+          >
+            {r.label}
+          </Text>
+
+          <Text
+            position={[0, -0.65, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            anchorX="center"
+            anchorY="middle"
+            fontSize={0.32}
+            color="#555555"
+            depthOffset={-1}
+          >
+            {`${formatFtIn(r.width)} × ${formatFtIn(r.height)}`}
+          </Text>
+        </group>
       )}
     </group>
   );
@@ -668,7 +732,7 @@ export default function FloorPlan3D({ data, floors, className, height = 620 }: F
 
         {selected && (
           <div style={infoPanel}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{selected.room.label}</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{selected.room.label}</div>
             <div style={infoKey}>Floor</div>
             <div style={infoVal}>Floor {selected.floorNumber}</div>
             <div style={infoKey}>Dimensions</div>

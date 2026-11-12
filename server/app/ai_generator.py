@@ -15,9 +15,10 @@ import urllib.error
 from typing import Dict, List, Optional
 from PIL import Image
 import io
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
 def get_api_key() -> str:
@@ -28,7 +29,7 @@ def get_api_key() -> str:
         or os.getenv("OPENAI_API_KEY")
     )
     if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable not set. Please add it to your .env file")
+        raise ValueError("GEMINI_API_KEY is not configured. Add it to server/.env before starting the backend.")
     return api_key
 
 
